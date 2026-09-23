@@ -60,6 +60,16 @@ else
   rm -f /etc/systemd/system/NetworkManager.service
 fi
 
+# Docker disables IPv6 on interfaces of networks without an IPv6 subnet, but
+# HAOS services need at least link-local IPv6 (OTBR's mDNS and border routing
+# on the backbone interface). With host networking this is the host's network
+# namespace, so it re-enables IPv6 on the host's interfaces as well.
+if is_true "${ENABLE_IPV6:-1}"; then
+  for disable_ipv6 in /proc/sys/net/ipv6/conf/*/disable_ipv6; do
+    ( echo 0 > "$disable_ipv6" ) 2>/dev/null || echo "docker-haos: cannot enable IPv6 via $disable_ipv6" >&2
+  done
+fi
+
 mount --make-rshared /mnt/data
 
 # systemd points PID 1's stdout at /dev/null, so Docker's log pipe is lost once

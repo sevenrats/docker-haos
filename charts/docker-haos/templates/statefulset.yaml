@@ -38,6 +38,8 @@ spec:
               value: {{ .Values.useUdevShim | quote }}
             - name: SETUP_PORT
               value: {{ .Values.setupPort | quote }}
+            - name: ENABLE_IPV6
+              value: {{ .Values.enableIpv6 | quote }}
           securityContext:
             privileged: {{ .Values.securityContext.privileged }}
           {{- if .Values.service.enabled }}

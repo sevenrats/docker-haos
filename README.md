@@ -133,6 +133,7 @@ docker exec haos systemctl restart docker
 | `USE_DUMMY_NETWORKMANAGER` | Disable NetworkManager and enable the dummy responder inside `haos-compat` | `1` |
 | `USE_UDEV_SHIM` | Inject an idle Supervisor udev monitor when needed (`auto`, `force`, or `off`) | `auto` |
 | `SETUP_PORT` | Port Home Assistant serves the onboarding page on. Set empty to keep the Home Assistant default (`80` from 2026.8, `8123` prior — [docs](https://www.home-assistant.io/integrations/http/#server-port)) | `8123` |
+| `ENABLE_IPV6` | Re-enable IPv6 on the container's interfaces, which Docker disables on networks without an IPv6 subnet. HAOS services such as OpenThread Border Router need at least link-local IPv6. With host networking this applies to the host's interfaces. | `1` |
 | `TZ` | Host time zone written to `/etc/timezone` | `UTC` |
 | `DEV` | Used for development purposes - mount live `haos-compat` code volume | `0` |
 

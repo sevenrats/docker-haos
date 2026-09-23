@@ -56,6 +56,7 @@ RUN rm /etc/resolv.conf; touch /etc/resolv.conf
 ENV USE_DUMMY_NETWORKMANAGER=1 \
     USE_UDEV_SHIM=auto \
     SETUP_PORT=8123 \
+    ENABLE_IPV6=1 \
     TZ=UTC
 
 VOLUME [ "/mnt/data" ]

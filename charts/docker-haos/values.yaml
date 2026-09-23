@@ -16,6 +16,8 @@ useDummyNetworkManager: true
 useUdevShim: auto
 # Port Home Assistant serves the onboarding page on (HA 2026.8+ defaults to 80).
 setupPort: "8123"
+# Re-enable IPv6 on the pod's interfaces (the node's interfaces with hostNetwork).
+enableIpv6: true
 useHostDevSerial: true
 
 service:

@@ -1,26 +1,75 @@
 #!/bin/sh
 set -eu
 
-# todo: make it configurable
-echo UTC > /etc/timezone
+# Runs once per outer-container start, before systemd. Everything that depends
+# on the container environment is resolved here; systemd units are static and
+# read the result from $runtime_env (systemd does not pass container env vars
+# to services).
 
-# mkdir -p /mnt/data
-# if [ ! -e /data/data.img ]; then
-#   size="${DATA_IMG_SIZE:-3G}"
-#   case "$size" in
-#     *G) count=$(( ${size%G} * 1024 )) ;;
-#     *M) count=$(( ${size%M} )) ;;
-#     *) echo "Unsupported DATA_IMG_SIZE=$size (use M or G suffix)" >&2; exit 1 ;;
-#   esac
-#   dd if=/dev/zero of=/data/data.img bs=1M count="$count"
-#   mkfs.xfs -f -n ftype=1 /data/data.img
-#   sync
-# fi
-# loopdev="$(losetup -f)"
-# losetup "$loopdev" /data/data.img
-# mount -t xfs "$loopdev" /mnt/data
+runtime_env=/etc/haos-one/runtime.env
+
+is_true() {
+  case "$1" in
+    1|true|TRUE|yes|YES|on|ON) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+fail() {
+  echo "haos-one: $*" >&2
+  exit 1
+}
+
+use_dummy_networkmanager=0
+if is_true "${USE_DUMMY_NETWORKMANAGER:-1}"; then
+  use_dummy_networkmanager=1
+fi
+
+use_udev_shim="${USE_UDEV_SHIM:-auto}"
+case "$use_udev_shim" in
+  auto|force|off) ;;
+  *) fail "unsupported USE_UDEV_SHIM=$use_udev_shim (use auto, force, or off)" ;;
+esac
+
+setup_port="${SETUP_PORT:-}"
+case "$setup_port" in
+  '') ;;
+  *[!0-9]*) fail "unsupported SETUP_PORT=$setup_port (use a port number)" ;;
+  *) [ "$setup_port" -ge 1 ] && [ "$setup_port" -le 65535 ] || fail "SETUP_PORT=$setup_port is out of range" ;;
+esac
+
+compat_docker_args=""
+if is_true "${DEV:-0}"; then
+  # Mount the live haos-one-compat code into the compat container.
+  compat_docker_args="-v /opt/haos-one-compat:/opt/haos-one-compat"
+fi
+
+mkdir -p "$(dirname "$runtime_env")"
+cat > "$runtime_env" <<EOF
+USE_DUMMY_NETWORKMANAGER=$use_dummy_networkmanager
+USE_UDEV_SHIM=$use_udev_shim
+SETUP_PORT=$setup_port
+COMPAT_DOCKER_ARGS=$compat_docker_args
+EOF
+
+printf '%s\n' "${TZ:-UTC}" > /etc/timezone
+
+if [ "$use_dummy_networkmanager" -eq 1 ]; then
+  ln -sf /dev/null /etc/systemd/system/NetworkManager.service
+else
+  rm -f /etc/systemd/system/NetworkManager.service
+fi
 
 mount --make-rshared /mnt/data
+
+# systemd points PID 1's stdout at /dev/null, so Docker's log pipe is lost once
+# it starts. Keep a relay that owns the pipe; haos-one-log-forward.service
+# writes the journal into it. /dev is not remounted by systemd, unlike /run.
+# Opening the FIFO read-write means the relay never sees EOF.
+log_fifo=/dev/haos-one-log
+rm -f "$log_fifo"
+mkfifo -m 0600 "$log_fifo"
+cat 0<>"$log_fifo" &
 
 # Force Supervisor to treat each outer-container start as a fresh host boot.
 # `/proc/stat` is mirrored from the real host kernel here, so its `btime`
@@ -34,66 +83,6 @@ if [ -f /mnt/data/supervisor/config.json ]; then
     printf '%s\n' "$config_json" > /mnt/data/supervisor/config.json
   fi
 fi
-
-use_dummy_networkmanager=0
-case "${USE_DUMMY_NETWORKMANAGER:-1}" in
-  1|true|TRUE|yes|YES|on|ON)
-    use_dummy_networkmanager=1
-    ln -sf /dev/null /etc/systemd/system/NetworkManager.service
-    ;;
-esac
-
-use_udev_shim="${USE_UDEV_SHIM:-auto}"
-case "$use_udev_shim" in
-  auto|force|off) ;;
-  *) echo "Unsupported USE_UDEV_SHIM=$use_udev_shim (use auto, force, or off)" >&2; exit 1 ;;
-esac
-
-mkdir -p /etc/haos-one-compat
-printf '%s\n' "$use_udev_shim" > /etc/haos-one-compat/udev-shim-mode
-
-mkdir -p /etc/systemd/system/multi-user.target.wants
-ln -sf /etc/systemd/system/haos-one-compat.service /etc/systemd/system/multi-user.target.wants/haos-one-compat.service
-mkdir -p /etc/systemd/system/haos-one-compat.service.d
-cat > /etc/systemd/system/haos-one-compat.service.d/override.conf <<EOF
-[Service]
-ExecStart=
-ExecStart=/usr/bin/docker run --name haos_one_compat -e USE_DUMMY_NETWORKMANAGER=$use_dummy_networkmanager -e USE_UDEV_SHIM=$use_udev_shim -e SETUP_PORT=${SETUP_PORT:-} -v /run/dbus:/run/dbus -v /run:/host-run haos_one_compat
-EOF
-
-# Disable in-container udev; Supervisor uses host udev data and the compatibility
-# monitor when the outer runtime cannot expose kernel events.
-ln -sf /dev/null /etc/systemd/system/systemd-udevd.service
-ln -sf /dev/null /etc/systemd/system/systemd-udevd-control.socket
-ln -sf /dev/null /etc/systemd/system/systemd-udevd-kernel.socket
-ln -sf /dev/null /etc/systemd/system/systemd-udev-trigger.service
-
-# Disable the HA CLI login service for wrong-geometry console, for example for docker-compose.
-# https://github.com/qweritos/haos-one/issues/31
-disable_ha_cli=0
-if [ -c /dev/console ]; then
-  console_size="$(stty -F /dev/console size 2>/dev/null || true)"
-  case "$console_size" in
-    ''|0\ *|*\ 0)
-      disable_ha_cli=1
-      ;;
-  esac
-fi
-
-if [ "$disable_ha_cli" -eq 1 ]; then
-  ln -sf /dev/null /etc/systemd/system/ha-cli@console.service
-  ln -sf /dev/null /etc/systemd/system/ha-cli@tty1.service
-fi
-
-case "${DEV:-0}" in
-  1|true|TRUE|yes|YES|on|ON)
-    cat > /etc/systemd/system/haos-one-compat.service.d/override.conf <<EOF
-[Service]
-ExecStart=
-ExecStart=/usr/bin/docker run --name haos_one_compat -e USE_DUMMY_NETWORKMANAGER=$use_dummy_networkmanager -e USE_UDEV_SHIM=$use_udev_shim -e SETUP_PORT=${SETUP_PORT:-} -v /run/dbus:/run/dbus -v /run:/host-run -v /opt/haos-one-compat:/opt/haos-one-compat haos_one_compat
-EOF
-    ;;
-esac
 
 # make rauc to start
 if [ -x /usr/bin/grub-editenv ]; then

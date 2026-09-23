@@ -2,11 +2,11 @@
 set -eu
 
 docker_bin="${DOCKER_BIN:-/usr/bin/docker}"
-mode_file="${UDEV_SHIM_MODE_FILE:-/etc/haos-one-compat/udev-shim-mode}"
 uid_map_file="${UID_MAP_FILE:-/proc/self/uid_map}"
 export DOCKER_HOST="${DOCKER_HOST:-unix:///run/docker-real.sock}"
 
-mode="$(cat "$mode_file" 2>/dev/null || printf 'auto\n')"
+# Provided through EnvironmentFile=/etc/haos-one/runtime.env.
+mode="${USE_UDEV_SHIM:-auto}"
 case "$mode" in
   force)
     shim_required=1

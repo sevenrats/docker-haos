@@ -64,6 +64,18 @@
       "description": "Supervisor udev compatibility mode.",
       "default": "auto"
     },
+    "setupPort": {
+      "type": "string",
+      "pattern": "^([0-9]{1,5})?$",
+      "description": "Port Home Assistant serves the onboarding page on. Empty keeps the Home Assistant default.",
+      "default": "8123"
+    },
+    "terminationGracePeriodSeconds": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Seconds systemd gets to shut down cleanly before the pod is killed.",
+      "default": 120
+    },
     "useHostDevSerial": {
       "type": "boolean",
       "description": "Mount host /dev/serial into the container (read-write).",
@@ -323,6 +335,8 @@
     "dnsPolicy",
     "useDummyNetworkManager",
     "useUdevShim",
+    "setupPort",
+    "terminationGracePeriodSeconds",
     "useHostDevSerial",
     "service",
     "ingress",

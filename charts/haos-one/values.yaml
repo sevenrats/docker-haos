@@ -9,9 +9,13 @@ nameOverride: ""
 fullnameOverride: ""
 
 hostNetwork: false
+# Time for systemd to stop Home Assistant and dockerd cleanly.
+terminationGracePeriodSeconds: 120
 dnsPolicy: Default
 useDummyNetworkManager: true
 useUdevShim: auto
+# Port Home Assistant serves the onboarding page on (HA 2026.8+ defaults to 80).
+setupPort: "8123"
 useHostDevSerial: true
 
 service:

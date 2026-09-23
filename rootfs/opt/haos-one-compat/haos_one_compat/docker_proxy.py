@@ -300,6 +300,8 @@ def _uses_keep_alive(version: str, headers: list[tuple[str, str]]) -> bool:
 async def _pipe(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
+    *,
+    half_close: bool = False,
 ) -> None:
     while True:
         chunk = await reader.read(_READ_CHUNK_SIZE)
@@ -307,6 +309,8 @@ async def _pipe(
             break
         writer.write(chunk)
         await writer.drain()
+    if half_close and writer.can_write_eof():
+        writer.write_eof()
 
 
 async def _bidirectional_relay(
@@ -315,19 +319,22 @@ async def _bidirectional_relay(
     upstream_reader: asyncio.StreamReader,
     upstream_writer: asyncio.StreamWriter,
 ) -> None:
-    tasks = {
-        asyncio.create_task(_pipe(client_reader, upstream_writer)),
-        asyncio.create_task(_pipe(upstream_reader, client_writer)),
-    }
-    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-    for task in pending:
-        task.cancel()
-    for task in pending:
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-    for task in done:
+    """Relay a hijacked or streaming connection until Docker closes its side.
+
+    Clients half-close once they have no more input (for example `docker exec`
+    without an attached stdin) while output is still pending, so client EOF is
+    forwarded upstream instead of ending the relay.
+    """
+    to_upstream = asyncio.create_task(
+        _pipe(client_reader, upstream_writer, half_close=True)
+    )
+    try:
         with contextlib.suppress(ConnectionError, BrokenPipeError):
-            task.result()
+            await _pipe(upstream_reader, client_writer)
+    finally:
+        to_upstream.cancel()
+        with contextlib.suppress(asyncio.CancelledError, ConnectionError, BrokenPipeError):
+            await to_upstream
 
 
 class DockerSocketProxy:

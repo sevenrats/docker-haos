@@ -13,10 +13,6 @@ RUN apt-get update \
 
 ARG TARGETARCH
 ARG HAOS_VERSION=""
-ARG DATA_IMG_SIZE="3G"
-ENV DATA_IMG_SIZE="${DATA_IMG_SIZE}"
-ENV USE_DUMMY_NETWORKMANAGER=1
-ENV USE_UDEV_SHIM=auto
 
 RUN mkdir -p /input /rootfs
 
@@ -59,6 +55,11 @@ COPY --from=builder /rootfs/ /
 ADD ./rootfs /
 
 RUN rm /etc/resolv.conf; touch /etc/resolv.conf
+
+ENV USE_DUMMY_NETWORKMANAGER=1 \
+    USE_UDEV_SHIM=auto \
+    SETUP_PORT=8123 \
+    TZ=UTC
 
 VOLUME [ "/mnt/data" ]
 EXPOSE 8123

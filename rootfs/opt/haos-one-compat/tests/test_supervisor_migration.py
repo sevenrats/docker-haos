@@ -48,13 +48,11 @@ class SupervisorMigrationTests(unittest.TestCase):
     ) -> list[str]:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            mode_file = root / "mode"
             uid_map_file = root / "uid_map"
             inspect_file = root / "inspect.json"
             docker_log = root / "docker.log"
             docker_bin = root / "docker"
 
-            mode_file.write_text(f"{mode}\n", encoding="ascii")
             uid_map_file.write_text(uid_map, encoding="ascii")
             inspect_file.write_text(
                 supervisor_inspect(configured=configured), encoding="utf-8"
@@ -86,7 +84,7 @@ exit 2
                     "DOCKER_BIN": str(docker_bin),
                     "DOCKER_LOG": str(docker_log),
                     "INSPECT_FILE": str(inspect_file),
-                    "UDEV_SHIM_MODE_FILE": str(mode_file),
+                    "USE_UDEV_SHIM": mode,
                     "UID_MAP_FILE": str(uid_map_file),
                 }
             )

@@ -6,9 +6,13 @@ Wants=docker.service
 [Service]
 Type=simple
 Environment=DOCKER_HOST=unix:///run/docker-real.sock
+# Written by /entrypoint.sh from the outer container's environment.
+EnvironmentFile=/etc/haos-one/runtime.env
 ExecStartPre=-/usr/bin/docker rm -f haos_one_compat
-ExecStartPre=/usr/bin/docker build -t haos_one_compat /opt/haos-one-compat
-ExecStart=/usr/bin/docker run --name haos_one_compat -e USE_UDEV_SHIM -v /run/dbus:/run/dbus -v /run:/host-run haos_one_compat
+# Build with the outer network: nested bridge DNS falls back to public resolvers
+# when the outer container only has Docker's embedded 127.0.0.11 (compose networks).
+ExecStartPre=/usr/bin/docker build --network host -t haos_one_compat /opt/haos-one-compat
+ExecStart=/usr/bin/docker run --rm --name haos_one_compat --env-file /etc/haos-one/runtime.env -v /run/dbus:/run/dbus -v /run:/host-run $COMPAT_DOCKER_ARGS haos_one_compat
 ExecStartPost=/bin/sh -ec 'i=0; while [ "$i" -lt 600 ]; do [ -S /run/docker.sock ] && exit 0; i=$((i + 1)); sleep 0.1; done; echo "haos_one_compat docker proxy socket not ready" >&2; exit 1'
 ExecStop=/usr/bin/docker stop haos_one_compat
 Restart=always

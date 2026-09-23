@@ -19,6 +19,12 @@ Important pieces:
 - host service: `/etc/systemd/system/haos-one-compat.service`
 - socket override: `/etc/systemd/system/docker.socket.d/override.conf`
 - process entrypoint: `/opt/haos-one-compat/haos_one_compat/__main__.py`
+- runtime configuration: `/etc/haos-one/runtime.env`
+
+systemd does not pass the outer container's environment to services. `/entrypoint.sh`
+validates `USE_DUMMY_NETWORKMANAGER`, `USE_UDEV_SHIM`, `SETUP_PORT` and `DEV` once and
+writes them to `/etc/haos-one/runtime.env`. The static units read that file
+(`EnvironmentFile=`) and pass it to the compat container with `docker run --env-file`.
 
 The service mounts:
 

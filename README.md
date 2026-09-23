@@ -39,8 +39,11 @@
 Simple as one command:
 
 ```
-docker run --name haos -ti --privileged -p 8123:8123 qweritos/haos-one
+docker run -d --name haos --privileged --stop-timeout 120 \
+  -p 8123:8123 -v haos-data:/mnt/data qweritos/haos-one
 ```
+
+Follow progress with `docker logs -f haos`.
 
 > You can pin a specific Home Assistant OS version tag (including prereleases), for example `qweritos/haos-one:17.0.rc2`
 For available HAOS versions, see:
@@ -52,9 +55,41 @@ https://github.com/home-assistant/operating-system/releases
 
 Replace `-p 8123:8123` with `--network host` if you want host networking (required for autodiscovery features).
 
+`--stop-timeout 120` gives systemd time to stop Home Assistant and its containers cleanly; Docker's default of 10 seconds cuts shutdown short.
+
 Wait for http://localhost:8123 to be available. Now you can create new House or restore from existing backup.
 
 > First startup can take a while as it pulls all required images — please be patient.
+
+## Docker Compose
+
+A ready-to-use [`compose.yaml`](compose.yaml) is included:
+
+```bash
+docker compose up -d
+docker compose logs -f
+```
+
+No `tty` or `stdin_open` is needed.
+
+## Rootless Docker
+
+The same `docker run` / `compose.yaml` works with rootless Docker. The udev shim
+(`USE_UDEV_SHIM=auto`) turns on automatically when root is remapped. Host
+prerequisites:
+
+- Delegate all cgroup controllers to user sessions, so the nested Docker can manage
+  Home Assistant containers:
+  ```bash
+  sudo mkdir -p /etc/systemd/system/user@.service.d
+  printf '[Service]\nDelegate=cpu cpuset io memory pids\n' \
+    | sudo tee /etc/systemd/system/user@.service.d/delegate.conf
+  sudo systemctl daemon-reload
+  ```
+  Log out and back in (or restart the rootless Docker daemon) afterwards.
+- `--network host` / `network_mode: host` only reaches the rootless network namespace,
+  not your LAN, so autodiscovery does not work. Use published ports.
+- Publishing host ports below 1024 requires lowering `net.ipv4.ip_unprivileged_port_start`.
 
 ## Kubernetes install with Helm 
 
@@ -96,31 +131,27 @@ cp -r /usr/share/hassio ./old-config
 then, push it to new instance:
 
 ```bash
-docker exec -it haos sh -c 'mv /mnt/data/supervisor /mnt/data/supervisor.bak && mkdir -p /mnt/data/supervisor'
+docker exec haos sh -c 'mv /mnt/data/supervisor /mnt/data/supervisor.bak && mkdir -p /mnt/data/supervisor'
 docker cp ./old-config/. haos:/mnt/data/supervisor/
 ```
 
 Finally, restart all Home Assistant containers:
 
 ```bash
-docker exec -it haos systemctl restart docker
+docker exec haos systemctl restart docker
 ```
 
 ## Recipes
 
 - Host networking (best for autodiscovery):
   ```
-  docker run --name haos -ti --privileged --network host qweritos/haos-one
+  docker run -d --name haos --privileged --stop-timeout 120 --network host -v haos-data:/mnt/data qweritos/haos-one
   ```
-- to make your data persistent, mount a volume into container's path `/mnt/data`
+- Data lives in the volume mounted at `/mnt/data`. To use a host directory instead of a named volume:
   ```
-    docker run --name haos -ti --privileged -p 8123:8123 -v ./data:/mnt/data qweritos/haos-one
+  docker run -d --name haos --privileged --stop-timeout 120 -p 8123:8123 -v ./data:/mnt/data qweritos/haos-one
   ```
-- macOS: use a named volume (overlay2 feature gaps with bind mounts):
-  ```
-  docker volume create haos-data
-  docker run --name haos -ti --privileged -p 8123:8123 -v haos-data:/mnt/data qweritos/haos-one
-  ```
+- macOS: use a named volume, as in the default command (overlay2 feature gaps with bind mounts).
 
 ### Env vars
 
@@ -128,7 +159,8 @@ docker exec -it haos systemctl restart docker
 | --- | --- | --- |
 | `USE_DUMMY_NETWORKMANAGER` | Disable NetworkManager and enable the dummy responder inside `haos-one-compat` | `1` |
 | `USE_UDEV_SHIM` | Inject an idle Supervisor udev monitor when needed (`auto`, `force`, or `off`) | `auto` |
-| `SETUP_PORT` | Forward the Home Assistant HTTP setup port to Core. | unset — `80` from Home Assistant 2026.8; `8123` prior ([docs](https://www.home-assistant.io/integrations/http/#server-port)) |
+| `SETUP_PORT` | Port Home Assistant serves the onboarding page on. Set empty to keep the Home Assistant default (`80` from 2026.8, `8123` prior — [docs](https://www.home-assistant.io/integrations/http/#server-port)) | `8123` |
+| `TZ` | Host time zone written to `/etc/timezone` | `UTC` |
 | `DEV` | Used for development purposes - mount live `haos-one-compat` code volume | `0` |
 
 When the udev shim is enabled, upgrading an existing installation automatically
@@ -137,10 +169,11 @@ the shim. Data in `/mnt/data/supervisor` is preserved.
 
 ## Troubleshooting
 
-- Drop into HA CLI: `docker attach haos`
-  > (detach with `Ctrl-p` + `Ctrl-q`) — more details: [here](https://docs.docker.com/reference/cli/docker/container/attach/#attach-to-and-detach-from-a-running-container)
-- Systemd logs (incl. containers logs): `docker exec -it haos journalctl -xb`
-- Container status: `docker exec -it haos docker ps -a`
+- Logs (systemd journal, incl. Supervisor, Core and add-ons): `docker logs -f haos`
+- HA CLI: `docker exec -it haos ha core info`
+- Full journal with explanations: `docker exec -it haos journalctl -xb`
+- Container status: `docker exec haos docker ps -a`
+- Host shell: `docker exec -it haos sh`
 
 ## How it works
 
@@ -152,6 +185,12 @@ See [docs](docs) for details.
 - `--network host` exposes services directly on the host network.
 - Protect `./data/` because it contains HA configuration and secrets.
 - AppArmor may be unavailable depending on your environment.
+- A privileged container shares the host kernel, so HAOS services built for bare metal are
+  disabled here because they would reconfigure the host: the hardware watchdog
+  (an unclean container exit would reboot the host), `systemd-sysctl` (host-global kernel
+  settings such as `vm.swappiness` and `kernel.core_pattern`), the swapfile, auditd and
+  NTP time setting. Set network sysctls with `docker run --sysctl` / compose `sysctls:` instead.
+- AppArmor profiles for add-ons are loaded into the host kernel, as on a regular HAOS host.
 
 ## Tested Environments
 

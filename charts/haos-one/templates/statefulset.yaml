@@ -25,6 +25,7 @@ spec:
       {{- end }}
     spec:
       hostNetwork: {{ .Values.hostNetwork }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       dnsPolicy: {{ .Values.dnsPolicy }}
       containers:
         - name: haos-one
@@ -35,6 +36,8 @@ spec:
               value: {{ .Values.useDummyNetworkManager | quote }}
             - name: USE_UDEV_SHIM
               value: {{ .Values.useUdevShim | quote }}
+            - name: SETUP_PORT
+              value: {{ .Values.setupPort | quote }}
           securityContext:
             privileged: {{ .Values.securityContext.privileged }}
           {{- if .Values.service.enabled }}

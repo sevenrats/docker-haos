@@ -80,6 +80,21 @@ class DockerProxyTests(unittest.IsolatedAsyncioTestCase):
                     body = b""
                 self.request_bodies.append(body)
 
+                if path.endswith("/start") and "/exec/" in path:
+                    # Like dockerd for `docker exec` without stdin: upgrade, then
+                    # emit output after the client has half-closed.
+                    writer.write(
+                        b"HTTP/1.1 101 UPGRADED\r\n"
+                        b"Content-Type: application/vnd.docker.raw-stream\r\n"
+                        b"Connection: Upgrade\r\n"
+                        b"Upgrade: tcp\r\n\r\n"
+                    )
+                    await writer.drain()
+                    await reader.read()
+                    writer.write(b"exec output\n")
+                    await writer.drain()
+                    return
+
                 if path == "/containers/json?all=1":
                     payload = json.dumps(
                         [
@@ -156,6 +171,31 @@ class DockerProxyTests(unittest.IsolatedAsyncioTestCase):
         await writer.wait_closed()
         header, body = raw.split(b"\r\n\r\n", 1)
         return header.decode("iso-8859-1"), body
+
+    async def test_hijacked_stream_keeps_output_after_client_half_close(self) -> None:
+        reader, writer = await asyncio.open_unix_connection(str(self.frontend_path))
+        payload = b'{"Detach":false,"Tty":false}'
+        writer.write(
+            (
+                "POST /v1.47/exec/abc/start HTTP/1.1\r\n"
+                "Host: localhost\r\n"
+                "Connection: Upgrade\r\n"
+                "Upgrade: tcp\r\n"
+                "Content-Type: application/json\r\n"
+                f"Content-Length: {len(payload)}\r\n\r\n"
+            ).encode("ascii")
+            + payload
+        )
+        await writer.drain()
+        header = await reader.readuntil(b"\r\n\r\n")
+        self.assertIn(b"101 UPGRADED", header)
+
+        writer.write_eof()
+        output = await asyncio.wait_for(reader.read(), timeout=2)
+        writer.close()
+        await writer.wait_closed()
+
+        self.assertEqual(output, b"exec output\n")
 
     async def test_info_response_has_compat_warning(self) -> None:
         header, body = await self._request("/info")

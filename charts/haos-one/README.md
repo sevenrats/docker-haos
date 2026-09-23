@@ -21,6 +21,8 @@ helm install haos-one oci://registry.andrey.wtf/charts/haos-one
 | `hostNetwork` | Enable host networking | `false` |
 | `dnsPolicy` | Pod DNS policy | `Default` |
 | `useDummyNetworkManager` | Enable dummy NetworkManager inside the container | `true` |
+| `setupPort` | Port Home Assistant serves the onboarding page on (empty keeps the HA default, `80` from 2026.8) | `"8123"` |
+| `terminationGracePeriodSeconds` | Time for systemd to shut down cleanly | `120` |
 | `useUdevShim` | Supervisor udev compatibility mode (`auto`, `force`, or `off`) | `auto` |
 | `service.enabled` | Create a Service | `true` |
 | `service.type` | Service type | `ClusterIP` |

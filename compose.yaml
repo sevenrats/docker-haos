@@ -1,0 +1,25 @@
+# Works with both rootful and rootless Docker. See README.md for rootless
+# prerequisites. No tty or stdin is needed: logs go to `docker compose logs`
+# and the HA CLI is `docker compose exec haos ha ...`.
+services:
+  haos:
+    image: qweritos/haos-one:latest
+    container_name: haos
+    privileged: true
+    restart: unless-stopped
+    # Give systemd time to stop Home Assistant and dockerd cleanly.
+    stop_grace_period: 2m
+    ports:
+      - "8123:8123"
+    # Or, for autodiscovery (rootful only), replace `ports` with:
+    # network_mode: host
+    volumes:
+      - haos-data:/mnt/data
+    # environment:
+    #   TZ: Europe/Berlin
+    #   USE_DUMMY_NETWORKMANAGER: "1"
+    #   USE_UDEV_SHIM: auto
+    #   SETUP_PORT: "8123"
+
+volumes:
+  haos-data:

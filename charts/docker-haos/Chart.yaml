@@ -1,0 +1,21 @@
+apiVersion: v2
+name: docker-haos
+description: Run Home Assistant OS in a single container on Kubernetes.
+type: application
+version: 0.1.0
+appVersion: "18.3"
+home: https://github.com/sevenrats/docker-haos
+sources:
+  - https://github.com/sevenrats/docker-haos
+maintainers:
+  - name: sevenrats
+    url: https://github.com/sevenrats
+keywords:
+  - home-assistant
+  - homeassistant
+  - hass
+  - hassio
+  - HassOS
+  - HAOS
+  - home assistant operating system
+icon: https://www.home-assistant.io/images/favicon-192x192.png

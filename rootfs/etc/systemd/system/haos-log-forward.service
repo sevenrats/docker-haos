@@ -1,0 +1,18 @@
+# Mirror the journal (host services, Supervisor, Core and add-ons, which use
+# the journald log driver) to the outer container's stdout for `docker logs`.
+# /dev/haos-log is a FIFO relayed to Docker by /entrypoint.sh.
+
+[Unit]
+Description=Forward the journal to the container's stdout
+DefaultDependencies=no
+After=systemd-journald.service
+Requires=systemd-journald.service
+
+[Service]
+ExecStart=/usr/bin/journalctl --boot --follow --no-hostname --output=short-iso --cursor-file=/run/haos/journal.cursor
+StandardOutput=file:/dev/haos-log
+StandardError=journal
+RuntimeDirectory=haos
+RuntimeDirectoryPreserve=yes
+Restart=always
+RestartSec=1s

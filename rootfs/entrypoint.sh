@@ -6,7 +6,7 @@ set -eu
 # read the result from $runtime_env (systemd does not pass container env vars
 # to services).
 
-runtime_env=/etc/haos-one/runtime.env
+runtime_env=/etc/haos/runtime.env
 
 is_true() {
   case "$1" in
@@ -16,7 +16,7 @@ is_true() {
 }
 
 fail() {
-  echo "haos-one: $*" >&2
+  echo "docker-haos: $*" >&2
   exit 1
 }
 
@@ -40,8 +40,8 @@ esac
 
 compat_docker_args=""
 if is_true "${DEV:-0}"; then
-  # Mount the live haos-one-compat code into the compat container.
-  compat_docker_args="-v /opt/haos-one-compat:/opt/haos-one-compat"
+  # Mount the live haos-compat code into the compat container.
+  compat_docker_args="-v /opt/haos-compat:/opt/haos-compat"
 fi
 
 mkdir -p "$(dirname "$runtime_env")"
@@ -63,10 +63,10 @@ fi
 mount --make-rshared /mnt/data
 
 # systemd points PID 1's stdout at /dev/null, so Docker's log pipe is lost once
-# it starts. Keep a relay that owns the pipe; haos-one-log-forward.service
+# it starts. Keep a relay that owns the pipe; haos-log-forward.service
 # writes the journal into it. /dev is not remounted by systemd, unlike /run.
 # Opening the FIFO read-write means the relay never sees EOF.
-log_fifo=/dev/haos-one-log
+log_fifo=/dev/haos-log
 rm -f "$log_fifo"
 mkfifo -m 0600 "$log_fifo"
 cat 0<>"$log_fifo" &
@@ -77,7 +77,6 @@ cat 0<>"$log_fifo" &
 # btime with the persisted /mnt/data/supervisor/config.json last_boot and may
 # classify a container restart as "Detected Supervisor restart", skipping
 # Home Assistant/add-on boot.
-# https://github.com/qweritos/haos-one/issues/35
 if [ -f /mnt/data/supervisor/config.json ]; then
   if config_json="$(jq '.last_boot = "1970-01-01T00:00:01+00:00"' /mnt/data/supervisor/config.json)"; then
     printf '%s\n' "$config_json" > /mnt/data/supervisor/config.json

@@ -3,7 +3,7 @@
 # and the HA CLI is `docker compose exec haos ha ...`.
 services:
   haos:
-    image: qweritos/haos-one:latest
+    image: ghcr.io/sevenrats/haos:latest
     container_name: haos
     privileged: true
     restart: unless-stopped

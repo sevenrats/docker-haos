@@ -5,7 +5,7 @@ docker_bin="${DOCKER_BIN:-/usr/bin/docker}"
 uid_map_file="${UID_MAP_FILE:-/proc/self/uid_map}"
 export DOCKER_HOST="${DOCKER_HOST:-unix:///run/docker-real.sock}"
 
-# Provided through EnvironmentFile=/etc/haos-one/runtime.env.
+# Provided through EnvironmentFile=/etc/haos/runtime.env.
 mode="${USE_UDEV_SHIM:-auto}"
 case "$mode" in
   force)
@@ -23,7 +23,7 @@ case "$mode" in
     fi
     ;;
   *)
-    echo "haos-one: invalid udev shim mode: $mode" >&2
+    echo "docker-haos: invalid udev shim mode: $mode" >&2
     exit 1
     ;;
 esac
@@ -36,7 +36,7 @@ if ! inspect_json="$("$docker_bin" container inspect hassio_supervisor 2>&1)"; t
   case "$inspect_json" in
     *"No such container"*|*"No such object"*) exit 0 ;;
     *)
-      echo "haos-one: failed to inspect hassio_supervisor: $inspect_json" >&2
+      echo "docker-haos: failed to inspect hassio_supervisor: $inspect_json" >&2
       exit 1
       ;;
   esac
@@ -53,12 +53,12 @@ if printf '%s\n' "$inspect_json" | jq -e '
   any(
     .Mounts[]?;
     .Destination == "/opt/haos-udev-shim" and
-    .Source == "/opt/haos-one-compat/udev-shim" and
+    .Source == "/opt/haos-compat/udev-shim" and
     .RW == false
   )
 ' >/dev/null; then
   exit 0
 fi
 
-echo "haos-one: recreating hassio_supervisor to enable the udev shim"
+echo "docker-haos: recreating hassio_supervisor to enable the udev shim"
 "$docker_bin" container rm -f hassio_supervisor >/dev/null

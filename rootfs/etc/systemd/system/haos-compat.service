@@ -1,0 +1,22 @@
+[Unit]
+Description=Build and run haos_compat container
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+Environment=DOCKER_HOST=unix:///run/docker-real.sock
+# Written by /entrypoint.sh from the outer container's environment.
+EnvironmentFile=/etc/haos/runtime.env
+ExecStartPre=-/usr/bin/docker rm -f haos_compat
+# Build with the outer network: nested bridge DNS falls back to public resolvers
+# when the outer container only has Docker's embedded 127.0.0.11 (compose networks).
+ExecStartPre=/usr/bin/docker build --network host -t haos_compat /opt/haos-compat
+ExecStart=/usr/bin/docker run --rm --name haos_compat --env-file /etc/haos/runtime.env -v /run/dbus:/run/dbus -v /run:/host-run $COMPAT_DOCKER_ARGS haos_compat
+ExecStartPost=/bin/sh -ec 'i=0; while [ "$i" -lt 600 ]; do [ -S /run/docker.sock ] && exit 0; i=$((i + 1)); sleep 0.1; done; echo "haos_compat docker proxy socket not ready" >&2; exit 1'
+ExecStop=/usr/bin/docker stop haos_compat
+Restart=always
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

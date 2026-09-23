@@ -1,3 +1,3 @@
-# haos-one Docs
+# docker-haos Docs
 
-- [haos_one_compat container](./haos-one-compat.md)
+- [haos_compat container](./haos-compat.md)

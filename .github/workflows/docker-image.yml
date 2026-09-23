@@ -13,9 +13,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository }}
-  DOCKERHUB_IMAGE: qweritos/haos-one
-  ARTIFACTHUB_REPO_METADATA_PATH: artifacthub-repo.yml
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/haos
   HAOS_VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.HAOS_VERSION || '' }}
   TAG_BASE: ${{ github.ref_name == 'master' && github.event.inputs.HAOS_VERSION == '' && 'latest' || github.ref_name }}
 
@@ -58,12 +56,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -87,7 +79,6 @@ jobs:
         with:
           images: |
             ${{ env.IMAGE_NAME }}
-            ${{ env.DOCKERHUB_IMAGE }}
           tags: |
             type=raw,value=${{ env.TAG_BASE }}-amd64
             type=raw,value=${{ env.HAOS_VERSION }}-amd64,enable=${{ github.ref_name == 'master' && env.HAOS_VERSION != '' }}
@@ -103,8 +94,8 @@ jobs:
             HAOS_VERSION=${{ env.HAOS_VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha,scope=haos-one-amd64
-          cache-to: type=gha,mode=max,scope=haos-one-amd64
+          cache-from: type=gha,scope=haos-amd64
+          cache-to: type=gha,mode=max,scope=haos-amd64
 
   build-arm64:
     name: Build arm64
@@ -118,12 +109,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -148,7 +133,6 @@ jobs:
         with:
           images: |
             ${{ env.IMAGE_NAME }}
-            ${{ env.DOCKERHUB_IMAGE }}
           tags: |
             type=raw,value=${{ env.TAG_BASE }}-arm64
             type=raw,value=${{ env.HAOS_VERSION }}-arm64,enable=${{ github.ref_name == 'master' && env.HAOS_VERSION != '' }}
@@ -164,8 +148,8 @@ jobs:
             HAOS_VERSION=${{ env.HAOS_VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha,scope=haos-one-arm64
-          cache-to: type=gha,mode=max,scope=haos-one-arm64
+          cache-from: type=gha,scope=haos-arm64
+          cache-to: type=gha,mode=max,scope=haos-arm64
 
   publish-manifests:
     name: Publish manifests
@@ -180,15 +164,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Set up ORAS
-        uses: oras-project/setup-oras@v1
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -202,42 +177,17 @@ jobs:
           docker buildx imagetools create -t "${IMAGE_NAME}:${TAG_BASE}" \
             "${IMAGE_NAME}:${TAG_BASE}-amd64" \
             "${IMAGE_NAME}:${TAG_BASE}-arm64"
-          docker buildx imagetools create -t "${DOCKERHUB_IMAGE}:${TAG_BASE}" \
-            "${DOCKERHUB_IMAGE}:${TAG_BASE}-amd64" \
-            "${DOCKERHUB_IMAGE}:${TAG_BASE}-arm64"
           if [ "${GITHUB_REF_NAME}" = "master" ] && [ -n "${HAOS_VERSION}" ]; then
             docker buildx imagetools create -t "${IMAGE_NAME}:${HAOS_VERSION}" \
               "${IMAGE_NAME}:${HAOS_VERSION}-amd64" \
               "${IMAGE_NAME}:${HAOS_VERSION}-arm64"
-            docker buildx imagetools create -t "${DOCKERHUB_IMAGE}:${HAOS_VERSION}" \
-              "${DOCKERHUB_IMAGE}:${HAOS_VERSION}-amd64" \
-              "${DOCKERHUB_IMAGE}:${HAOS_VERSION}-arm64"
             if [[ "${HAOS_VERSION}" =~ ^([0-9]+)\. ]]; then
               major_tag="${BASH_REMATCH[1]}"
               docker buildx imagetools create -t "${IMAGE_NAME}:${major_tag}" \
                 "${IMAGE_NAME}:${major_tag}-amd64" \
                 "${IMAGE_NAME}:${major_tag}-arm64"
-              docker buildx imagetools create -t "${DOCKERHUB_IMAGE}:${major_tag}" \
-                "${DOCKERHUB_IMAGE}:${major_tag}-amd64" \
-                "${DOCKERHUB_IMAGE}:${major_tag}-arm64"
             fi
           fi
-
-      - name: Log in to registry (ORAS)
-        run: |
-          echo "${DOCKERHUB_TOKEN}" | oras login docker.io \
-            --username "${DOCKERHUB_USERNAME}" \
-            --password-stdin
-        env:
-          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Push Artifact Hub repository metadata
-        run: |
-          oras push \
-            "docker.io/${DOCKERHUB_IMAGE}:artifacthub.io" \
-            --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml \
-            "${ARTIFACTHUB_REPO_METADATA_PATH}:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml"
 
   bump-chart-app-version:
     name: Bump chart app version
@@ -271,17 +221,17 @@ jobs:
             exit 0
           fi
 
-          current_version="$(sed -n 's/^appVersion: *"\{0,1\}\([^" ]*\)"\{0,1\}$/\1/p' charts/haos-one/Chart.yaml)"
-          current_image_tag="$(sed -n 's/^  tag: *"\{0,1\}\([^" ]*\)"\{0,1\}$/\1/p' charts/haos-one/values.yaml)"
+          current_version="$(sed -n 's/^appVersion: *"\{0,1\}\([^" ]*\)"\{0,1\}$/\1/p' charts/docker-haos/Chart.yaml)"
+          current_image_tag="$(sed -n 's/^  tag: *"\{0,1\}\([^" ]*\)"\{0,1\}$/\1/p' charts/docker-haos/values.yaml)"
           if [ "${current_version}" = "${HAOS_VERSION}" ] && [ "${current_image_tag}" = "${HAOS_VERSION}" ]; then
             echo "Chart already uses HAOS ${HAOS_VERSION}."
             echo "changed=false" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
-          sed -i -E "s/^appVersion: .*/appVersion: \"${HAOS_VERSION}\"/" charts/haos-one/Chart.yaml
-          sed -i -E "s/^  tag: .*/  tag: \"${HAOS_VERSION}\"/" charts/haos-one/values.yaml
-          perl -i -pe 's{^(\| `image\.tag` \| Image tag \|) `[^`]+` \|$}{$1 `'"${HAOS_VERSION}"'` |}' charts/haos-one/README.md
+          sed -i -E "s/^appVersion: .*/appVersion: \"${HAOS_VERSION}\"/" charts/docker-haos/Chart.yaml
+          sed -i -E "s/^  tag: .*/  tag: \"${HAOS_VERSION}\"/" charts/docker-haos/values.yaml
+          perl -i -pe 's{^(\| `image\.tag` \| Image tag \|) `[^`]+` \|$}{$1 `'"${HAOS_VERSION}"'` |}' charts/docker-haos/README.md
           echo "changed=true" >> "${GITHUB_OUTPUT}"
 
       - name: Open chart version bump PR
@@ -296,6 +246,6 @@ jobs:
           branch: automation/bump-haos-app-version
           delete-branch: true
           add-paths: |
-            charts/haos-one/Chart.yaml
-            charts/haos-one/values.yaml
-            charts/haos-one/README.md
+            charts/docker-haos/Chart.yaml
+            charts/docker-haos/values.yaml
+            charts/docker-haos/README.md

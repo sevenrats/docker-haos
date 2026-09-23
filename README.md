@@ -1,30 +1,8 @@
 <div align="center">
-  <h1><img alt="Home Assistant" height="48" src="https://cdn.simpleicons.org/homeassistant/41BDF5" /> haos-one</h1>
+  <h1><img alt="Home Assistant" height="48" src="https://cdn.simpleicons.org/homeassistant/41BDF5" /> docker-haos</h1>
   <p>Home Assistant Operating System <br /> Single‑Container Docker Image</p>
-  <h2>✨ Full HAOS Vibes, Inside Docker ✨</h2>
-  <p>Run a fully featured HAOS instance in a single Docker container</p>
-  <p>Keep the same experience you’d get on dedicated hardware or a VM.</p>
-  <p>
-    <h4>
-    <a href="https://github.com/hassio-addons">
-      <img alt="Add-ons"  src="https://avatars.githubusercontent.com/u/30772201?s=16&v=4" />
-      Add-ons supported, no compromises.
-    </a>
-    </h4>
-  </p>
+  <p>Run a fully featured HAOS instance, add-ons included, in a single Docker container.</p>
 </div>
-
-<p align="center">
-  <a href="https://github.com/qweritos/haos-one/releases"><img alt="Release" src="https://img.shields.io/github/v/release/qweritos/haos-one?style=flat-square" /></a>
-  <a href="https://github.com/qweritos/haos-one/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/qweritos/haos-one?style=flat-square" /></a>
-  <a href="https://github.com/qweritos/haos-one/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/qweritos/haos-one?style=flat-square" /></a>
-  <a href="https://github.com/qweritos/haos-one/forks"><img alt="Forks" src="https://img.shields.io/github/forks/qweritos/haos-one?style=flat-square" /></a>
-  <a href="https://github.com/qweritos/haos-one/issues"><img alt="Issues" src="https://img.shields.io/github/issues/qweritos/haos-one?style=flat-square" /></a>
-  <a href="https://github.com/qweritos/haos-one/commits/main"><img alt="Last Commit" src="https://img.shields.io/github/last-commit/qweritos/haos-one?style=flat-square" /></a>
-  <a href="https://artifacthub.io/packages/search?repo=haos-one"><img alt="Artifact Hub" src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/haos-one" /></a>
-</p>
-
-<br />
 
 - [Run HA OS without sacrificing a whole computer to it.](https://www.home-assistant.io/blog/2025/05/22/deprecating-core-and-supervised-installation-methods-and-32-bit-systems/)
 - Avoid VM performance overhead and hypervisor complexity.
@@ -32,7 +10,7 @@
 - Use host networking for service autodiscovery, simpler routing, and lower latency.
 - __x86_64__ and __aarch64__ images available.
 - Rootless containers support
-- Kubernetes? Sure. [Helm chart included](./charts/haos-one).
+- Kubernetes? Sure. [Helm chart included](./charts/docker-haos).
 
 ## How
 
@@ -40,18 +18,13 @@ Simple as one command:
 
 ```
 docker run -d --name haos --privileged --stop-timeout 120 \
-  -p 8123:8123 -v haos-data:/mnt/data qweritos/haos-one
+  -p 8123:8123 -v haos-data:/mnt/data ghcr.io/sevenrats/haos
 ```
 
 Follow progress with `docker logs -f haos`.
 
-> You can pin a specific Home Assistant OS version tag (including prereleases), for example `qweritos/haos-one:17.0.rc2`
-For available HAOS versions, see:
-https://github.com/home-assistant/operating-system/releases
-
-<p align="">
-  <img alt="Intro" src="docs/assets/intro.webp" />
-</p>
+> Images are tagged by Home Assistant OS version, so you can pin one, for example `ghcr.io/sevenrats/haos:18.3`.
+For HAOS versions, see https://github.com/home-assistant/operating-system/releases
 
 Replace `-p 8123:8123` with `--network host` if you want host networking (required for autodiscovery features).
 
@@ -96,16 +69,16 @@ prerequisites:
 Install from the OCI registry:
 
 ```bash
-helm install haos-one oci://registry.andrey.wtf/charts/haos-one
+helm install docker-haos oci://ghcr.io/sevenrats/charts/docker-haos
 ```
 
 Or install from the local chart:
 
 ```bash
-helm install haos-one ./charts/haos-one
+helm install docker-haos ./charts/docker-haos
 ```
 
-Values and configuration options: see [`charts/haos-one/README.md`](charts/haos-one/README.md).
+Values and configuration options: see [`charts/docker-haos/README.md`](charts/docker-haos/README.md).
 
 ## Migration from deprecated Supervised installation method
 
@@ -145,11 +118,11 @@ docker exec haos systemctl restart docker
 
 - Host networking (best for autodiscovery):
   ```
-  docker run -d --name haos --privileged --stop-timeout 120 --network host -v haos-data:/mnt/data qweritos/haos-one
+  docker run -d --name haos --privileged --stop-timeout 120 --network host -v haos-data:/mnt/data ghcr.io/sevenrats/haos
   ```
 - Data lives in the volume mounted at `/mnt/data`. To use a host directory instead of a named volume:
   ```
-  docker run -d --name haos --privileged --stop-timeout 120 -p 8123:8123 -v ./data:/mnt/data qweritos/haos-one
+  docker run -d --name haos --privileged --stop-timeout 120 -p 8123:8123 -v ./data:/mnt/data ghcr.io/sevenrats/haos
   ```
 - macOS: use a named volume, as in the default command (overlay2 feature gaps with bind mounts).
 
@@ -157,11 +130,11 @@ docker exec haos systemctl restart docker
 
 | Name | Description | Default |
 | --- | --- | --- |
-| `USE_DUMMY_NETWORKMANAGER` | Disable NetworkManager and enable the dummy responder inside `haos-one-compat` | `1` |
+| `USE_DUMMY_NETWORKMANAGER` | Disable NetworkManager and enable the dummy responder inside `haos-compat` | `1` |
 | `USE_UDEV_SHIM` | Inject an idle Supervisor udev monitor when needed (`auto`, `force`, or `off`) | `auto` |
 | `SETUP_PORT` | Port Home Assistant serves the onboarding page on. Set empty to keep the Home Assistant default (`80` from 2026.8, `8123` prior — [docs](https://www.home-assistant.io/integrations/http/#server-port)) | `8123` |
 | `TZ` | Host time zone written to `/etc/timezone` | `UTC` |
-| `DEV` | Used for development purposes - mount live `haos-one-compat` code volume | `0` |
+| `DEV` | Used for development purposes - mount live `haos-compat` code volume | `0` |
 
 When the udev shim is enabled, upgrading an existing installation automatically
 recreates `hassio_supervisor` once if its stored container configuration lacks
@@ -194,31 +167,22 @@ See [docs](docs) for details.
 
 ## Tested Environments
 
-| OS                             | Arch   | Env                                                         | Status | Notes                |
-| ------------------------------ | ------ | ----------------------------------------------------------- | ------ | -------------------- |
-| macOS 15.6 (24G84)             | x86_64 | Docker Desktop 4.55.0, Docker Engine 29.1.3 (client/server) | ✅     | AppArmor unavailable; use named volume (see [Recipes](#recipes)). |
-| Ubuntu 25.10 (Questing Quokka) | x86_64 | Docker Engine 29.1.3 (client/server) <br />*(rootless & rootfull)*                        | ✅     | —                    |
-| Ubuntu 25.10 (Questing Quokka) | x86_64 | Podman 5.4.2                                                | ✅     | —                    |
-| Armbian OS 25.02.0 (bullseye) | aarch64 | Docker Engine 28.0.0 (client/server) | ✅ | — |
-| Proxmox VE 9.2.2 | x86_64 | Unprivileged LXC running nested Docker Engine 26.1.5+dfsg1 (client/server) <br />*(rootless & rootfull)* | ✅ | - |
+| OS | Arch | Env | Status |
+| --- | --- | --- | --- |
+| Debian 13 (trixie) | x86_64 | Docker Engine 26.1.5 (rootful), Docker Compose 2.26.1 | ✅ |
 
 ## Known Issues
 
-- ~~`--network host` lets HA manage host networking and may cause misconfiguration.~~
-`USE_DUMMY_NETWORKMANAGER=1` is enabled by default.
-- ~~`"Unsupported system - Network Manager issues"` warning - fix in progress.~~
-- ~~`Failed to get outbound IP, retrying in 5s: can't get default interface from Supervisor: {"result":"error","message":"Interface default does not exist"` in journal (with non-host networking) - fix in progress.~~
-- ~~Docker Desktop on MacOS becomes inaccessible if run with `--network=host`~~
-in-container udev is masked automatically.
-
-
-## TODOs & Progress:
-
-See [project page](https://github.com/users/qweritos/projects/2) for details.
+- Supervisor shows a DNS repair notice for `192.168.1.1`. The dummy NetworkManager reports a
+  fixed nameserver; name resolution still works through Supervisor's DNS fallback.
+- `bluetooth.service` fails when no Bluetooth adapter is available. It is left enabled for
+  Home Assistant's Bluetooth integration.
 
 ## License
 
 Apache License 2.0 (see `LICENSE`).
+
+Derived from [qweritos/haos-one](https://github.com/qweritos/haos-one) (Apache-2.0); substantially modified.
 
 ## Disclaimer
 

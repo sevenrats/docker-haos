@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "docker-haos.fullname" . }}
+spec:
+  serviceName: {{ include "docker-haos.fullname" . }}
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "docker-haos.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "docker-haos.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- if or .Values.apparmor.unconfined .Values.podAnnotations }}
+      annotations:
+        {{- if .Values.apparmor.unconfined }}
+        container.apparmor.security.beta.kubernetes.io/docker-haos: unconfined
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+    spec:
+      hostNetwork: {{ .Values.hostNetwork }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      containers:
+        - name: docker-haos
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: USE_DUMMY_NETWORKMANAGER
+              value: {{ .Values.useDummyNetworkManager | quote }}
+            - name: USE_UDEV_SHIM
+              value: {{ .Values.useUdevShim | quote }}
+            - name: SETUP_PORT
+              value: {{ .Values.setupPort | quote }}
+          securityContext:
+            privileged: {{ .Values.securityContext.privileged }}
+          {{- if .Values.service.enabled }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          {{- end }}
+          {{- if or .Values.persistence.enabled .Values.apparmor.unconfined .Values.useHostDevSerial }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            {{- if .Values.apparmor.unconfined }}
+            - name: host-security
+              mountPath: /sys/kernel/security
+            {{- end }}
+            {{- if .Values.useHostDevSerial }}
+            - name: host-dev-serial
+              mountPath: /dev/serial
+            {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if or .Values.persistence.enabled .Values.apparmor.unconfined .Values.useHostDevSerial }}
+      volumes:
+        {{- if .Values.persistence.enabled }}
+          {{- if .Values.persistence.hostPath }}
+        - name: data
+          hostPath:
+            path: {{ .Values.persistence.hostPath }}
+            type: DirectoryOrCreate
+          {{- else if .Values.persistence.existingClaim }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim }}
+          {{- else }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "docker-haos.fullname" . }}
+          {{- end }}
+        {{- end }}
+        {{- if .Values.apparmor.unconfined }}
+        - name: host-security
+          hostPath:
+            path: /sys/kernel/security
+            type: ""
+        {{- end }}
+        {{- if .Values.useHostDevSerial }}
+        - name: host-dev-serial
+          hostPath:
+            path: /dev/serial
+            type: Directory
+        {{- end }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

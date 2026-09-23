@@ -1,0 +1,16 @@
+{{- if .Values.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "docker-haos.fullname" . }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: {{ include "docker-haos.servicePortName" . }}
+      port: {{ .Values.service.port }}
+      targetPort: {{ include "docker-haos.servicePortName" . }}
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: {{ include "docker-haos.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
